@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_DATABASE:talon_db}}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_DATABASE:talon}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:talon}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:password}}
     driver-class-name: org.postgresql.Driver

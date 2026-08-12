@@ -2,7 +2,9 @@ package com.talon.core.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,8 +24,23 @@ import java.util.stream.Stream;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    // Session-based chain: gates the Swagger UI/docs pages behind a Keycloak
+    // browser login. Must also own the oauth2Login machinery's own endpoints
+    // (/oauth2/**, /login/**) or the redirect callback falls through to the
+    // stateless resource-server chain below and gets rejected as a missing JWT.
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain swaggerFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/oauth2/**", "/login/**")
+            .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+            .oauth2Login(Customizer.withDefaults());
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authorize -> authorize

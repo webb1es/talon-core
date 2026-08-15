@@ -145,7 +145,7 @@ public class KeycloakAdminClientService {
         updateUser(keycloakId, Map.of("requiredActions", List.of("UPDATE_PASSWORD")));
     }
 
-    /** Removes whichever Talon-managed realm role the user currently has and assigns the new one. */
+    /** Replaces the user's Talon-managed realm role; leaves other realm roles alone. */
     @SuppressWarnings("unchecked")
     public void assignRealmRole(String keycloakId, Role role) {
         String token = adminAccessToken();

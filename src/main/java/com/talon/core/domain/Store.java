@@ -8,10 +8,7 @@ import jakarta.persistence.Table;
 
 import java.util.UUID;
 
-/**
- * Bare stub, just enough to unblock the session-info store-name join. The real
- * Stores module (address, settings, etc.) is a separate, later migration.
- */
+/** Id + name for session-info joins; not a full store model. */
 @Entity
 @Table(name = "stores")
 public class Store {

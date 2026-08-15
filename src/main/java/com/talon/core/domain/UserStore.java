@@ -10,11 +10,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Flat FK-holding join row (mirrors the Drizzle user_stores table shape)
- * rather than a bidirectional JPA relationship — keeps this simple while the
- * Stores module itself doesn't exist yet.
- */
+/** Flat user↔store join (FKs, not a bidirectional JPA association). */
 @Entity
 @Table(name = "user_stores", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "store_id"}))
 public class UserStore {

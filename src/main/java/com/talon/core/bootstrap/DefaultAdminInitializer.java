@@ -13,10 +13,9 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Links the tadmin Keycloak identity (declared in the realm import) to a
- * local User row on startup — nothing else can create the first admin, since
- * AdminUserController's create path needs an admin to already exist. No-op
- * once the row exists. Delete this class once a real super_admin exists.
+ * Links the tadmin Keycloak identity (realm import) to a local User row on
+ * startup — AdminUserController cannot create the first admin. No-op once
+ * the row exists.
  */
 @Component
 public class DefaultAdminInitializer implements ApplicationRunner {

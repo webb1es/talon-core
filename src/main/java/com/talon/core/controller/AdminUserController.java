@@ -30,10 +30,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Team-management endpoints — writes to both Keycloak (identity, credentials,
- * role) and the local User/UserStore rows (PIN, store assignments, profile).
- * No transaction stats or rich store fields: those belong to modules that
- * don't exist in talon-core yet.
+ * Team-management endpoints — writes Keycloak (identity, credentials, role)
+ * and local User/UserStore rows (PIN, store assignments, profile).
  */
 @RestController
 @RequestMapping("/api/users")

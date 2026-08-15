@@ -2,7 +2,7 @@ package com.talon.core.lib;
 
 import java.util.Optional;
 
-/** Zimbabwe phone number normalization — ported from api/src/routes/users.routes.ts. */
+/** Zimbabwe phone number normalization. */
 public final class PhoneNumbers {
 
     private PhoneNumbers() {

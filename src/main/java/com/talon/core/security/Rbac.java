@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Direct port of api/src/lib/rbac.ts — role hierarchy for who can manage whom. */
+/** Role hierarchy for who can manage whom. */
 @Service
 public class Rbac {
 

@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,12 +21,12 @@ public class DemoController {
     }
 
     @GetMapping("/api/secured")
-    public Map<String, Object> getSecured(@AuthenticationPrincipal Jwt jwt) {
-        log.info("Accessing secured endpoint. User subject: {}", jwt.getSubject());
+    public Map<String, Object> getSecured(@AuthenticationPrincipal OidcUser user) {
+        log.info("Accessing secured endpoint. User subject: {}", user.getSubject());
         return Map.of(
             "message", "This is a secured endpoint",
-            "subject", jwt.getSubject(),
-            "claims", jwt.getClaims()
+            "subject", user.getSubject(),
+            "claims", user.getClaims()
         );
     }
 

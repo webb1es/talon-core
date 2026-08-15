@@ -8,8 +8,35 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: update
+  session:
+    store-type: none
   security:
     oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: http://localhost:8080/realms/talon-realm/protocol/openid-connect/certs
+      client:
+        registration:
+          keycloak:
+            client-id: test-client
+            client-secret: test-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid, profile, roles
+          keycloak-admin:
+            client-id: test-admin-client
+            client-secret: test-admin-secret
+            authorization-grant-type: client_credentials
+            provider: keycloak
+        provider:
+          # Static endpoints, not issuer-uri — issuer-uri triggers eager OIDC
+          # discovery (a real network call to /.well-known/openid-configuration)
+          # at context startup, which has nothing to reach in a test run.
+          keycloak:
+            authorization-uri: http://localhost:8080/auth
+            token-uri: http://localhost:8080/token
+            jwk-set-uri: http://localhost:8080/certs
+            user-info-uri: http://localhost:8080/userinfo
+            user-name-attribute: sub
+
+app:
+  frontend-url: http://localhost:8080
+  keycloak-admin-api-base: http://localhost:8080/admin/realms/talon
+  cors-allowed-origins: http://localhost:8080

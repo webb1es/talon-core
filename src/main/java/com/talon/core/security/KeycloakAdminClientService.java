@@ -91,7 +91,7 @@ public class KeycloakAdminClientService {
         body.put("username", username);
         body.put("email", email);
         body.put("enabled", true);
-        body.put("emailVerified", false);
+        body.put("emailVerified", true);
         body.put("credentials", List.of(Map.of(
             "type", "password",
             "value", tempPassword,

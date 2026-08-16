@@ -28,7 +28,7 @@ No Dockerfile / GHCR workflow yet. gitops still pins
 | `FRONTEND_URL` | SPA origin (logout redirect + post-login) |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated; credentials required, so not `*` |
 
-Realm import (clients, roles, seeded `tadmin`) is
+Realm import (clients, roles, service account — not users) is
 `gitops/workloads/keycloak-test/talon-realm.yaml`. Copy generated client secrets
 into gitops secret `talon-core-kc`. Logout redirect must exact-match
 `FRONTEND_URL + "/login"` in that import.
@@ -45,8 +45,11 @@ Prometheus success-rate ≥ 95%. Sessions are JDBC (2 replicas + traffic split).
   access-token-only `roles` scope.
 - CSRF is off; SameSite=Lax is the defense (SPA and API share `mytalon.co.zw`).
 - A Keycloak login with no local `users` row is 403, not auto-provisioned.
-- `tadmin` local row is created at boot by `DefaultAdminInitializer` (chicken-egg
-  for the first admin). No-op if Keycloak is down.
+- `tadmin` is reconciled at boot: missing Keycloak user, missing local row, or
+  a mismatched `keycloakId` is created/linked. First password is an app default;
+  Keycloak forces a change on first login. No-op if both already match, or if
+  Keycloak is down. Staff users are created from the app only — not in the
+  realm import.
 - Swagger is `super_admin` only.
 - Unauthenticated API calls redirect to Keycloak (oauth2Login), they do not 401.
 - `/readyz` and `/healthz` check the database and return 503 if it isn't reachable.

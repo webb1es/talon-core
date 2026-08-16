@@ -196,6 +196,7 @@ public class AdminUserController {
         if (body.email() != null) {
             target.setEmail(body.email().isBlank() ? null : body.email());
             keycloakUpdate.put("email", target.getEmail());
+            keycloakUpdate.put("emailVerified", true);
         }
         if (body.phone() != null) {
             target.setPhone(PhoneNumbers.normalize(body.phone()).orElse(null));

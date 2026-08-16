@@ -13,9 +13,10 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Links the tadmin Keycloak identity (realm import) to a local User row on
- * startup — AdminUserController cannot create the first admin. No-op once
- * the row exists.
+ * First super_admin cannot be created through AdminUserController. Every boot
+ * checks that tadmin exists in Keycloak and in the local users row, creating
+ * whichever side is missing and aligning keycloakId. No-op when both already
+ * match, or if Keycloak is unreachable.
  */
 @Component
 public class DefaultAdminInitializer implements ApplicationRunner {
@@ -24,6 +25,8 @@ public class DefaultAdminInitializer implements ApplicationRunner {
     private static final String USERNAME = "tadmin";
     private static final String EMAIL = "admin@mytalon.co.zw";
     private static final String DISPLAY_NAME = "Admin Talon-App";
+    /** First sign-in only — createUser sets UPDATE_PASSWORD so Keycloak discards this. */
+    private static final String BOOTSTRAP_PASSWORD = "ChangeMeNow!";
 
     private final UserRepository userRepository;
     private final KeycloakAdminClientService keycloakAdminClientService;
@@ -36,21 +39,43 @@ public class DefaultAdminInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByUsername(USERNAME)) {
-            return;
-        }
+        String createdKeycloakId = null;
         try {
-            keycloakAdminClientService.findUserIdByUsername(USERNAME).ifPresent(this::createLocalRow);
+            User local = userRepository.findByUsername(USERNAME).orElse(null);
+            String keycloakId = keycloakAdminClientService.findUserIdByUsername(USERNAME).orElse(null);
+
+            if (keycloakId == null) {
+                keycloakId = keycloakAdminClientService.createUser(USERNAME, EMAIL, BOOTSTRAP_PASSWORD, true);
+                createdKeycloakId = keycloakId;
+                keycloakAdminClientService.assignRealmRole(keycloakId, Role.SUPER_ADMIN);
+            }
+
+            UUID linkedId = UUID.fromString(keycloakId);
+            if (local == null) {
+                createLocalRow(linkedId);
+                return;
+            }
+            if (!linkedId.equals(local.getKeycloakId())) {
+                local.setKeycloakId(linkedId);
+                userRepository.save(local);
+            }
         } catch (RuntimeException e) {
+            if (createdKeycloakId != null) {
+                try {
+                    keycloakAdminClientService.deleteUser(createdKeycloakId);
+                } catch (RuntimeException cleanup) {
+                    log.error("Failed to roll back Keycloak user {} after local bootstrap failed", createdKeycloakId, cleanup);
+                }
+            }
             // A boot-time convenience check must never block startup — Keycloak
             // being briefly unreachable here just means this stays a no-op.
-            log.warn("Could not check Keycloak for {} at startup: {}", USERNAME, e.getMessage());
+            log.warn("Could not reconcile {} at startup: {}", USERNAME, e.getMessage());
         }
     }
 
-    private void createLocalRow(String keycloakId) {
+    private void createLocalRow(UUID keycloakId) {
         User user = new User();
-        user.setKeycloakId(UUID.fromString(keycloakId));
+        user.setKeycloakId(keycloakId);
         user.setUsername(USERNAME);
         user.setEmail(EMAIL);
         user.setDisplayName(DISPLAY_NAME);

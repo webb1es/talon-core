@@ -11,11 +11,12 @@ import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.savedrequest.SavedRequest;
 
 import java.io.IOException;
+import java.net.URI;
 
 /**
- * Post-login destination depends on the trigger: a saved request means
- * Swagger initiated the login (return there); no saved request means the SPA
- * did (return to the frontend origin, not talon-core's own API host).
+ * Only Swagger login has a saved request worth restoring. The SPA's
+ * session-info probe is also saved by oauth2Login, and sending the browser
+ * there after login lands on an API 403 page instead of the frontend.
  */
 public class SpaAwareAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
 
@@ -31,10 +32,28 @@ public class SpaAwareAuthenticationSuccessHandler implements AuthenticationSucce
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                          Authentication authentication) throws IOException, ServletException {
         SavedRequest savedRequest = requestCache.getRequest(request, response);
-        if (savedRequest != null) {
+        if (savedRequest != null && isSwaggerReturn(savedRequest)) {
             savedRequestHandler.onAuthenticationSuccess(request, response, authentication);
             return;
         }
+        if (savedRequest != null) {
+            requestCache.removeRequest(request, response);
+        }
         response.sendRedirect(frontendUrl);
+    }
+
+    private static boolean isSwaggerReturn(SavedRequest savedRequest) {
+        String redirectUrl = savedRequest.getRedirectUrl();
+        if (redirectUrl == null) {
+            return false;
+        }
+        try {
+            String path = URI.create(redirectUrl).getPath();
+            return path != null && (path.startsWith("/swagger-ui")
+                || path.equals("/swagger-ui.html")
+                || path.startsWith("/v3/api-docs"));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

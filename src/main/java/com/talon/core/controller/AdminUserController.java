@@ -14,6 +14,8 @@ import com.talon.core.security.CurrentUser;
 import com.talon.core.security.CurrentUserProfile;
 import com.talon.core.security.KeycloakAdminClientService;
 import com.talon.core.security.Rbac;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/users")
 public class AdminUserController {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminUserController.class);
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
@@ -129,26 +132,37 @@ public class AdminUserController {
 
         // Keycloak enforces username/email uniqueness — createUser() surfaces
         // a conflict itself rather than this pre-checking a separate cache.
-        String tempPassword = generateTempPassword();
-        String keycloakId = keycloakAdminClientService.createUser(username, body.email(), tempPassword, true);
-        keycloakAdminClientService.assignRealmRole(keycloakId, targetRole);
+        String keycloakId = null;
+        try {
+            keycloakId = keycloakAdminClientService.createUser(username, body.email(), generateTempPassword(), true);
+            keycloakAdminClientService.assignRealmRole(keycloakId, targetRole);
 
-        User user = new User();
-        user.setKeycloakId(UUID.fromString(keycloakId));
-        user.setUsername(username);
-        user.setEmail(body.email());
-        normalizedPhone.ifPresent(user::setPhone);
-        user.setDisplayName(body.displayName());
-        user.setRole(targetRole);
-        user.setActive(true);
-        user = userRepository.save(user);
+            User user = new User();
+            user.setKeycloakId(UUID.fromString(keycloakId));
+            user.setUsername(username);
+            user.setEmail(body.email());
+            normalizedPhone.ifPresent(user::setPhone);
+            user.setDisplayName(body.displayName());
+            user.setRole(targetRole);
+            user.setActive(true);
+            user = userRepository.save(user);
 
-        List<UUID> resolvedStoreIds = (body.storeIds() != null && !body.storeIds().isEmpty())
-            ? body.storeIds()
-            : (body.storeId() != null ? List.of(body.storeId()) : List.of());
-        saveStoreAssignments(user.getId(), resolvedStoreIds);
+            List<UUID> resolvedStoreIds = (body.storeIds() != null && !body.storeIds().isEmpty())
+                ? body.storeIds()
+                : (body.storeId() != null ? List.of(body.storeId()) : List.of());
+            saveStoreAssignments(user.getId(), resolvedStoreIds);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("userId", user.getId()));
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("userId", user.getId()));
+        } catch (RuntimeException e) {
+            if (keycloakId != null) {
+                try {
+                    keycloakAdminClientService.deleteUser(keycloakId);
+                } catch (RuntimeException cleanup) {
+                    log.error("Failed to roll back Keycloak user {} after local create failed", keycloakId, cleanup);
+                }
+            }
+            throw e;
+        }
     }
 
     public record UpdateUserRequest(String displayName, String email, String phone, String role,
@@ -169,8 +183,9 @@ public class AdminUserController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to edit this user");
         }
 
+        Role previousRole = target.getRole();
         Role newRole = body.role() != null ? Role.fromValue(body.role()) : null;
-        if (newRole != null && newRole != target.getRole() && !rbac.canAssignRole(currentUserRole, newRole)) {
+        if (newRole != null && newRole != previousRole && !rbac.canAssignRole(currentUserRole, newRole)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot assign this role");
         }
 
@@ -192,19 +207,39 @@ public class AdminUserController {
         if (newRole != null) {
             target.setRole(newRole);
         }
-        userRepository.save(target);
 
-        if (!keycloakUpdate.isEmpty()) {
-            keycloakAdminClientService.updateUser(target.getKeycloakId().toString(), keycloakUpdate);
-        }
-        if (newRole != null) {
-            keycloakAdminClientService.assignRealmRole(target.getKeycloakId().toString(), newRole);
-        }
+        String keycloakId = target.getKeycloakId().toString();
+        Map<String, Object> previousKeycloakUser = null;
+        boolean keycloakChanged = false;
+        try {
+            if (!keycloakUpdate.isEmpty() || newRole != null) {
+                previousKeycloakUser = keycloakAdminClientService.getUser(keycloakId);
+            }
+            if (!keycloakUpdate.isEmpty()) {
+                keycloakAdminClientService.updateUser(keycloakId, keycloakUpdate);
+                keycloakChanged = true;
+            }
+            if (newRole != null) {
+                keycloakAdminClientService.assignRealmRole(keycloakId, newRole);
+                keycloakChanged = true;
+            }
 
-        if (body.storeIds() != null || body.storeId() != null) {
-            List<UUID> resolvedStoreIds = (body.storeIds() != null) ? body.storeIds()
-                : List.of(body.storeId());
-            saveStoreAssignments(id, resolvedStoreIds);
+            userRepository.save(target);
+            if (body.storeIds() != null || body.storeId() != null) {
+                List<UUID> resolvedStoreIds = (body.storeIds() != null) ? body.storeIds()
+                    : List.of(body.storeId());
+                saveStoreAssignments(id, resolvedStoreIds);
+            }
+        } catch (RuntimeException e) {
+            if (keycloakChanged) {
+                try {
+                    keycloakAdminClientService.replaceUser(keycloakId, previousKeycloakUser);
+                    keycloakAdminClientService.assignRealmRole(keycloakId, previousRole);
+                } catch (RuntimeException cleanup) {
+                    log.error("Failed to roll back Keycloak user {} after local update failed", keycloakId, cleanup);
+                }
+            }
+            throw e;
         }
 
         return Map.of("success", true);
@@ -226,9 +261,11 @@ public class AdminUserController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to delete this user");
         }
 
-        keycloakAdminClientService.deleteUser(target.getKeycloakId().toString());
+        // Local first so a Keycloak failure rolls the row back; Keycloak-first
+        // would leave a local user whose identity is already gone.
         userStoreRepository.deleteAll(userStoreRepository.findByUserId(id));
         userRepository.delete(target);
+        keycloakAdminClientService.deleteUser(target.getKeycloakId().toString());
         return Map.of("success", true);
     }
 

@@ -27,8 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Own-account profile endpoints. No password endpoints: Keycloak owns
- * credentials, and there's no local path that needs to verify one.
+ * No password endpoints: Keycloak owns credentials, and there's no local
+ * path that needs to verify one.
  */
 @RestController
 @RequestMapping("/api/profile")
@@ -72,7 +72,7 @@ public class ProfileController {
             user.getUsername(),
             user.getEmail(),
             user.getDisplayName(),
-            user.getRole().getValue(),
+            currentUser.role(),
             user.getAvatarUrl(),
             currentUser.defaultStoreId(),
             storeAssignments,

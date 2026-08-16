@@ -49,5 +49,5 @@ Prometheus success-rate ≥ 95%. Sessions are JDBC (2 replicas + traffic split).
   for the first admin). No-op if Keycloak is down.
 - Swagger is `super_admin` only.
 - Unauthenticated API calls redirect to Keycloak (oauth2Login), they do not 401.
-- `jpa.show-sql: true` and `ddl-auto: update` are on in `application.yml` (including
-  whatever profile gitops runs).
+- `/readyz` and `/healthz` check the database and return 503 if it isn't reachable.
+- `ddl-auto: update` is on in `application.yml` (including whatever profile gitops runs).

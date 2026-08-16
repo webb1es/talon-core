@@ -13,9 +13,9 @@ import java.util.UUID;
 
 /**
  * The app's own user profile — everything Keycloak doesn't own. Credentials,
- * email verification, and password state live in Keycloak now; keycloakId is
- * the join key back to that identity. PIN and store assignment stay local
- * since they're app-level concerns Keycloak has no concept of.
+ * email verification, and password state live in Keycloak; keycloakId is the
+ * join key back to that identity. PIN and store assignment stay local since
+ * they're app-level concerns Keycloak has no concept of.
  */
 @Entity
 @Table(name = "users")

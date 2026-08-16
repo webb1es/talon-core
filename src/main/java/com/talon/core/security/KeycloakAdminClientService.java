@@ -4,12 +4,13 @@ import com.talon.core.domain.Role;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Client for Keycloak's Admin REST API, authenticated via the
@@ -39,7 +41,23 @@ public class KeycloakAdminClientService {
     public KeycloakAdminClientService(OAuth2AuthorizedClientManager authorizedClientManager,
                                        @Value("${app.keycloak-admin-api-base}") String adminApiBase) {
         this.authorizedClientManager = authorizedClientManager;
-        this.restClient = RestClient.builder().baseUrl(adminApiBase).build();
+        this.restClient = RestClient.builder()
+            .baseUrl(adminApiBase)
+            .requestInterceptor((request, body, execution) -> {
+                request.getHeaders().setBearerAuth(adminAccessToken());
+                return execution.execute(request, body);
+            })
+            .defaultStatusHandler(HttpStatusCode::isError, (request, response) -> {
+                int code = response.getStatusCode().value();
+                if (code == 409) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Username or email is already in use");
+                }
+                if (code == 404) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Keycloak user not found");
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin API error");
+            })
+            .build();
     }
 
     private String adminAccessToken() {
@@ -52,6 +70,14 @@ public class KeycloakAdminClientService {
             throw new IllegalStateException("Could not obtain a Keycloak admin service-account token");
         }
         return client.getAccessToken().getTokenValue();
+    }
+
+    private <T> T call(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (ResourceAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin API unreachable", e);
+        }
     }
 
     /**
@@ -75,7 +101,11 @@ public class KeycloakAdminClientService {
             body.put("requiredActions", List.of("UPDATE_PASSWORD"));
         }
 
-        var response = createUserRequest(body);
+        ResponseEntity<Void> response = call(() -> restClient.post()
+            .uri("/users")
+            .body(body)
+            .retrieve()
+            .toBodilessEntity());
 
         String location = response.getHeaders().getFirst("Location");
         if (location == null) {
@@ -84,48 +114,75 @@ public class KeycloakAdminClientService {
         return location.substring(location.lastIndexOf('/') + 1);
     }
 
-    private ResponseEntity<Void> createUserRequest(Map<String, Object> body) {
-        try {
-            return restClient.post()
-                .uri("/users")
-                .header("Authorization", "Bearer " + adminAccessToken())
-                .body(body)
-                .retrieve()
-                .toBodilessEntity();
-        } catch (HttpClientErrorException.Conflict e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username or email is already in use");
-        }
-    }
-
     /** Keycloak enforces username uniqueness natively — used to check for an existing user, not to create one. */
     @SuppressWarnings("unchecked")
     public Optional<String> findUserIdByUsername(String username) {
-        List<Map<String, Object>> results = restClient.get()
+        List<Map<String, Object>> results = call(() -> restClient.get()
             .uri(uriBuilder -> uriBuilder.path("/users").queryParam("username", username).queryParam("exact", true).build())
-            .header("Authorization", "Bearer " + adminAccessToken())
             .retrieve()
-            .body(List.class);
+            .body(List.class));
         if (results == null || results.isEmpty()) {
             return Optional.empty();
         }
         return Optional.ofNullable((String) results.get(0).get("id"));
     }
 
-    public void updateUser(String keycloakId, Map<String, Object> fields) {
-        restClient.put()
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getUser(String keycloakId) {
+        Map<String, Object> user = call(() -> restClient.get()
             .uri("/users/{id}", keycloakId)
-            .header("Authorization", "Bearer " + adminAccessToken())
-            .body(fields)
             .retrieve()
-            .toBodilessEntity();
+            .body(Map.class));
+        if (user == null) {
+            throw new IllegalStateException("Keycloak returned an empty user representation");
+        }
+        return user;
     }
 
+    /**
+     * GET-merge-PUT: Keycloak's PUT replaces the whole UserRepresentation, so
+     * a partial body would wipe username/requiredActions/etc.
+     */
+    public void updateUser(String keycloakId, Map<String, Object> fields) {
+        Map<String, Object> existing = getUser(keycloakId);
+        existing.remove("access");
+        existing.putAll(fields);
+        putUser(keycloakId, existing);
+    }
+
+    /** Full replace used to roll back a failed local write. */
+    public void replaceUser(String keycloakId, Map<String, Object> representation) {
+        Map<String, Object> body = new HashMap<>(representation);
+        body.remove("access");
+        putUser(keycloakId, body);
+    }
+
+    private void putUser(String keycloakId, Map<String, Object> body) {
+        call(() -> {
+            restClient.put()
+                .uri("/users/{id}", keycloakId)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+            return null;
+        });
+    }
+
+    /** 404 is success: the identity is already gone. */
     public void deleteUser(String keycloakId) {
-        restClient.delete()
-            .uri("/users/{id}", keycloakId)
-            .header("Authorization", "Bearer " + adminAccessToken())
-            .retrieve()
-            .toBodilessEntity();
+        try {
+            call(() -> {
+                restClient.delete()
+                    .uri("/users/{id}", keycloakId)
+                    .retrieve()
+                    .toBodilessEntity();
+                return null;
+            });
+        } catch (ResponseStatusException e) {
+            if (e.getStatusCode() != HttpStatus.NOT_FOUND) {
+                throw e;
+            }
+        }
     }
 
     /** Sets a new temporary credential — used for admin-triggered resets, forcing UPDATE_PASSWORD next login. */
@@ -135,12 +192,14 @@ public class KeycloakAdminClientService {
             "value", newPassword,
             "temporary", true
         );
-        restClient.put()
-            .uri("/users/{id}/reset-password", keycloakId)
-            .header("Authorization", "Bearer " + adminAccessToken())
-            .body(credential)
-            .retrieve()
-            .toBodilessEntity();
+        call(() -> {
+            restClient.put()
+                .uri("/users/{id}/reset-password", keycloakId)
+                .body(credential)
+                .retrieve()
+                .toBodilessEntity();
+            return null;
+        });
 
         updateUser(keycloakId, Map.of("requiredActions", List.of("UPDATE_PASSWORD")));
     }
@@ -148,13 +207,10 @@ public class KeycloakAdminClientService {
     /** Replaces the user's Talon-managed realm role; leaves other realm roles alone. */
     @SuppressWarnings("unchecked")
     public void assignRealmRole(String keycloakId, Role role) {
-        String token = adminAccessToken();
-
-        List<Map<String, Object>> currentMappings = restClient.get()
+        List<Map<String, Object>> currentMappings = call(() -> restClient.get()
             .uri("/users/{id}/role-mappings/realm", keycloakId)
-            .header("Authorization", "Bearer " + token)
             .retrieve()
-            .body(List.class);
+            .body(List.class));
 
         if (currentMappings != null) {
             List<Map<String, Object>> toRemove = currentMappings.stream()
@@ -162,12 +218,14 @@ public class KeycloakAdminClientService {
                 .filter(m -> !role.getValue().equals(m.get("name")))
                 .toList();
             if (!toRemove.isEmpty()) {
-                restClient.method(HttpMethod.DELETE)
-                    .uri("/users/{id}/role-mappings/realm", keycloakId)
-                    .header("Authorization", "Bearer " + token)
-                    .body(toRemove)
-                    .retrieve()
-                    .toBodilessEntity();
+                call(() -> {
+                    restClient.method(HttpMethod.DELETE)
+                        .uri("/users/{id}/role-mappings/realm", keycloakId)
+                        .body(toRemove)
+                        .retrieve()
+                        .toBodilessEntity();
+                    return null;
+                });
             }
             boolean alreadyAssigned = currentMappings.stream()
                 .anyMatch(m -> role.getValue().equals(m.get("name")));
@@ -176,17 +234,18 @@ public class KeycloakAdminClientService {
             }
         }
 
-        Map<String, Object> roleRepresentation = restClient.get()
+        Map<String, Object> roleRepresentation = call(() -> restClient.get()
             .uri("/roles/{roleName}", role.getValue())
-            .header("Authorization", "Bearer " + token)
             .retrieve()
-            .body(Map.class);
+            .body(Map.class));
 
-        restClient.post()
-            .uri("/users/{id}/role-mappings/realm", keycloakId)
-            .header("Authorization", "Bearer " + token)
-            .body(new ArrayList<>(List.of(roleRepresentation)))
-            .retrieve()
-            .toBodilessEntity();
+        call(() -> {
+            restClient.post()
+                .uri("/users/{id}/role-mappings/realm", keycloakId)
+                .body(new ArrayList<>(List.of(roleRepresentation)))
+                .retrieve()
+                .toBodilessEntity();
+            return null;
+        });
     }
 }

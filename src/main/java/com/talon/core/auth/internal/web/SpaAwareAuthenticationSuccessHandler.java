@@ -16,8 +16,8 @@ import java.net.URI;
 
 /**
  * Only Swagger login has a saved request worth restoring. The SPA's
- * session-info probe is also saved by oauth2Login, and sending the browser
- * there after login lands on an API 403 page instead of the frontend.
+ * /api/v1/users/me probe is also saved by oauth2Login, and sending the browser
+ * there after login lands on an API JSON page instead of the dashboard.
  */
 @RequiredArgsConstructor
 public class SpaAwareAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
@@ -37,7 +37,7 @@ public class SpaAwareAuthenticationSuccessHandler implements AuthenticationSucce
         if (savedRequest != null) {
             requestCache.removeRequest(request, response);
         }
-        response.sendRedirect(frontendUrl);
+        response.sendRedirect(trimTrailingSlash(frontendUrl) + "/dashboard");
     }
 
     private static boolean isSwaggerReturn(SavedRequest savedRequest) {
@@ -53,5 +53,12 @@ public class SpaAwareAuthenticationSuccessHandler implements AuthenticationSucce
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    private static String trimTrailingSlash(String url) {
+        if (url.endsWith("/")) {
+            return url.substring(0, url.length() - 1);
+        }
+        return url;
     }
 }

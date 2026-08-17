@@ -46,7 +46,6 @@ public class MeService {
             user.getDisplayName(),
             currentUser.role(),
             user.getAvatarUrl(),
-            currentUser.defaultStoreId(),
             storeAssignments,
             user.getPin() != null
         );

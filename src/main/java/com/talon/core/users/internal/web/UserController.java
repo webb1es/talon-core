@@ -2,6 +2,7 @@ package com.talon.core.users.internal.web;
 
 import com.talon.core.users.internal.dto.CreateUserRequest;
 import com.talon.core.users.internal.dto.UpdateUserRequest;
+import com.talon.core.users.internal.dto.UserOverviewResponse;
 import com.talon.core.users.internal.dto.UserResponse;
 import com.talon.core.users.internal.service.UserService;
 import com.talon.core.auth.CurrentUser;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,7 +28,7 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -35,6 +37,12 @@ public class UserController {
     @GetMapping
     public ItemsResponse<UserResponse> list(@CurrentUser CurrentUserProfile currentUser) {
         return ItemsResponse.of(userService.list(currentUser));
+    }
+
+    @GetMapping("/overview")
+    @PreAuthorize("hasRole('super_admin')")
+    public UserOverviewResponse overview(@CurrentUser CurrentUserProfile currentUser) {
+        return userService.overview();
     }
 
     @GetMapping("/{id}")

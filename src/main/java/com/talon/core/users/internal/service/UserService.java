@@ -6,6 +6,7 @@ import com.talon.core.users.internal.dto.StoreAssignmentDto;
 import com.talon.core.users.internal.dto.UpdateUserRequest;
 import com.talon.core.users.internal.entity.User;
 import com.talon.core.users.internal.repository.UserRepository;
+import com.talon.core.users.internal.dto.UserOverviewResponse;
 import com.talon.core.users.internal.dto.UserResponse;
 import com.talon.core.users.internal.entity.UserStore;
 import com.talon.core.users.internal.repository.UserStoreRepository;
@@ -93,7 +94,7 @@ public class UserService {
         }
         String username = body.username().toLowerCase();
         Optional<String> normalizedPhone = PhoneNumbers.normalize(body.phone());
-        List<UUID> resolvedStoreIds = resolveStoreIds(body.storeIds(), body.storeId());
+        List<UUID> resolvedStoreIds = resolveStoreIds(body.storeIds());
         requireKnownStores(resolvedStoreIds);
 
         String keycloakId = null;
@@ -176,8 +177,8 @@ public class UserService {
             }
 
             userRepository.save(target);
-            if (body.storeIds() != null || body.storeId() != null) {
-                List<UUID> resolvedStoreIds = resolveStoreIds(body.storeIds(), body.storeId());
+            if (body.storeIds() != null) {
+                List<UUID> resolvedStoreIds = resolveStoreIds(body.storeIds());
                 requireKnownStores(resolvedStoreIds);
                 saveStoreAssignments(id, resolvedStoreIds);
             }
@@ -220,6 +221,50 @@ public class UserService {
         keycloakAdminPort.resetPassword(target.getKeycloakId().toString(), generateTempPassword());
     }
 
+    @Transactional(readOnly = true)
+    public UserOverviewResponse overview() {
+        List<User> staff = userRepository.findAll().stream()
+            .filter(u -> u.getRole() != Role.SUPER_ADMIN)
+            .toList();
+        Map<UUID, List<UserStore>> assignmentsByUser = userStoreRepository.findAll().stream()
+            .collect(Collectors.groupingBy(UserStore::getUserId));
+
+        int total = staff.size();
+        int active = (int) staff.stream().filter(User::isActive).count();
+        int unassigned = (int) staff.stream()
+            .filter(u -> assignmentsByUser.getOrDefault(u.getId(), List.of()).isEmpty())
+            .count();
+
+        List<UserOverviewResponse.RoleBreakdown> roles = List.of(Role.ADMIN, Role.MANAGER, Role.CASHIER).stream()
+            .map(role -> {
+                List<User> matching = staff.stream().filter(u -> u.getRole() == role).toList();
+                return new UserOverviewResponse.RoleBreakdown(
+                    role.getValue(),
+                    matching.size(),
+                    (int) matching.stream().filter(User::isActive).count()
+                );
+            })
+            .toList();
+
+        List<UserOverviewResponse.AttentionUser> attention = staff.stream()
+            .map(u -> {
+                boolean noStore = assignmentsByUser.getOrDefault(u.getId(), List.of()).isEmpty();
+                if (!u.isActive()) {
+                    return new UserOverviewResponse.AttentionUser(
+                        u.getId(), u.getDisplayName(), u.getEmail(), u.getRole().getValue(), "inactive");
+                }
+                if (noStore) {
+                    return new UserOverviewResponse.AttentionUser(
+                        u.getId(), u.getDisplayName(), u.getEmail(), u.getRole().getValue(), "no_store");
+                }
+                return null;
+            })
+            .filter(java.util.Objects::nonNull)
+            .toList();
+
+        return new UserOverviewResponse(total, active, total - active, unassigned, roles, attention);
+    }
+
     private void requireCanManage(CurrentUserProfile currentUser, User target) {
         Role currentUserRole = roleOf(currentUser);
         List<UUID> targetStoreIds = userStoreRepository.findByUserId(target.getId()).stream()
@@ -246,11 +291,8 @@ public class UserService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private static List<UUID> resolveStoreIds(List<UUID> storeIds, UUID storeId) {
-        if (storeIds != null && !storeIds.isEmpty()) {
-            return storeIds;
-        }
-        return storeId != null ? List.of(storeId) : List.of();
+    private static List<UUID> resolveStoreIds(List<UUID> storeIds) {
+        return storeIds != null ? List.copyOf(storeIds) : List.of();
     }
 
     private void requireKnownStores(List<UUID> storeIds) {
@@ -279,11 +321,6 @@ public class UserService {
                 storeNames.getOrDefault(a.getStoreId(), "Unknown"),
                 a.isDefault()))
             .toList();
-        UUID defaultStoreId = assignments.stream()
-            .filter(UserStore::isDefault)
-            .map(UserStore::getStoreId)
-            .findFirst()
-            .orElse(null);
         return new UserResponse(
             user.getId(),
             user.getUsername(),
@@ -291,7 +328,6 @@ public class UserService {
             user.getPhone(),
             user.getDisplayName(),
             user.getRole().getValue(),
-            defaultStoreId,
             user.isActive(),
             user.getAvatarUrl(),
             user.getCreatedAt(),

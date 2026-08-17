@@ -10,7 +10,6 @@ public record MeResponse(
     String displayName,
     String role,
     String avatarUrl,
-    UUID storeId,
     List<StoreAssignmentDto> storeAssignments,
     boolean hasPin
 ) {

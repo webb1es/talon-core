@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -63,7 +64,7 @@ class StoreApiTests {
 
     @Test
     void unauthenticatedListReturns401Json() throws Exception {
-        mockMvc.perform(get("/api/stores"))
+        mockMvc.perform(get("/api/v1/stores"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.status").value(401))
             .andExpect(jsonPath("$.detail").value("Authentication required"));
@@ -71,7 +72,7 @@ class StoreApiTests {
 
     @Test
     void cashierCannotCreateStore() throws Exception {
-        mockMvc.perform(post("/api/stores")
+        mockMvc.perform(post("/api/v1/stores")
                 .with(cashierLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"Forbidden Store\"}"))
@@ -80,37 +81,36 @@ class StoreApiTests {
 
     @Test
     void adminCanCreateListGetPatchAndDeactivate() throws Exception {
-        MvcResult created = mockMvc.perform(post("/api/stores")
+        MvcResult created = mockMvc.perform(post("/api/v1/stores")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"Harare Main\"}"))
             .andExpect(status().isCreated())
             .andExpect(header().exists("Location"))
-            .andExpect(jsonPath("$.name").value("Harare Main"))
-            .andExpect(jsonPath("$.currencyCode").value("USD"))
-            .andExpect(jsonPath("$.timezone").value("Africa/Harare"))
-            .andExpect(jsonPath("$.active").value(true))
+            .andExpect(jsonPath("$.data.name").value("Harare Main"))
+            .andExpect(jsonPath("$.data.currencyCode").value("USD"))
+            .andExpect(jsonPath("$.data.timezone").value("Africa/Harare"))
+            .andExpect(jsonPath("$.data.active").value(true))
             .andReturn();
 
         String id = objectMapper.readTree(created.getResponse().getContentAsString())
-            .get("id").asText();
+            .get("data").get("id").asText();
 
-        mockMvc.perform(get("/api/stores").with(adminLogin()))
+        mockMvc.perform(get("/api/v1/stores").with(adminLogin()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items", hasSize(1)))
-            .andExpect(jsonPath("$.items[0].name").value("Harare Main"));
+            .andExpect(jsonPath("$.data.items[*].id").value(hasItem(id)));
 
-        mockMvc.perform(get("/api/stores/" + id).with(adminLogin()))
+        mockMvc.perform(get("/api/v1/stores/" + id).with(adminLogin()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.id").value(id));
+            .andExpect(jsonPath("$.data.id").value(id));
 
-        mockMvc.perform(patch("/api/stores/" + id)
+        mockMvc.perform(patch("/api/v1/stores/" + id)
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"taxRate\":0.15,\"active\":false,\"address\":\"1 Samora Machel\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.active").value(false))
-            .andExpect(jsonPath("$.address").value("1 Samora Machel"));
+            .andExpect(jsonPath("$.data.active").value(false))
+            .andExpect(jsonPath("$.data.address").value("1 Samora Machel"));
     }
 
     @Test
@@ -132,15 +132,15 @@ class StoreApiTests {
         assignStore(cashier.getId(), assigned.getId());
         assignStore(cashier.getId(), inactive.getId());
 
-        mockMvc.perform(get("/api/stores").with(cashierLogin()))
+        mockMvc.perform(get("/api/v1/stores").with(cashierLogin()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items", hasSize(1)))
-            .andExpect(jsonPath("$.items[0].id").value(assigned.getId().toString()));
+            .andExpect(jsonPath("$.data.items", hasSize(1)))
+            .andExpect(jsonPath("$.data.items[0].id").value(assigned.getId().toString()));
 
-        mockMvc.perform(get("/api/stores/" + other.getId()).with(cashierLogin()))
+        mockMvc.perform(get("/api/v1/stores/" + other.getId()).with(cashierLogin()))
             .andExpect(status().isNotFound());
 
-        mockMvc.perform(get("/api/stores/" + inactive.getId()).with(cashierLogin()))
+        mockMvc.perform(get("/api/v1/stores/" + inactive.getId()).with(cashierLogin()))
             .andExpect(status().isNotFound());
     }
 
@@ -153,7 +153,7 @@ class StoreApiTests {
         User cashier = userRepository.findByUsername("cashier-user").orElseThrow();
         assignStore(cashier.getId(), store.getId());
 
-        mockMvc.perform(delete("/api/stores/" + store.getId()).with(adminLogin()))
+        mockMvc.perform(delete("/api/v1/stores/" + store.getId()).with(adminLogin()))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.status").value(409));
     }
@@ -164,13 +164,13 @@ class StoreApiTests {
         store.setName("Empty");
         store = storeRepository.save(store);
 
-        mockMvc.perform(delete("/api/stores/" + store.getId()).with(adminLogin()))
+        mockMvc.perform(delete("/api/v1/stores/" + store.getId()).with(adminLogin()))
             .andExpect(status().isNoContent());
     }
 
     @Test
     void createWithoutNameReturnsValidationErrors() throws Exception {
-        mockMvc.perform(post("/api/stores")
+        mockMvc.perform(post("/api/v1/stores")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))

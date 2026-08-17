@@ -11,11 +11,13 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class PinController {
 
@@ -25,19 +27,19 @@ public class PinController {
 
     public record PinVerifyResponse(boolean valid) {}
 
-    @PutMapping({"/api/auth/pin", "/api/me/pin"})
+    @PutMapping("/pin")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void set(@CurrentUser CurrentUserProfile currentUser, @Valid @RequestBody PinRequest request) {
         pinService.set(currentUser.id(), request.pin());
     }
 
-    @DeleteMapping({"/api/auth/pin", "/api/me/pin"})
+    @DeleteMapping("/pin")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clear(@CurrentUser CurrentUserProfile currentUser) {
         pinService.clear(currentUser.id());
     }
 
-    @PostMapping("/api/auth/pin/verify")
+    @PostMapping("/pin/verify")
     public PinVerifyResponse verify(@CurrentUser CurrentUserProfile currentUser, @RequestBody PinVerifyRequest body) {
         if (body.pin() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PIN is required");

@@ -8,7 +8,6 @@ public record UpdateUserRequest(
     String email,
     String phone,
     String role,
-    UUID storeId,
     List<UUID> storeIds,
     Boolean active
 ) {

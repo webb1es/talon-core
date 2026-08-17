@@ -11,7 +11,6 @@ public record CreateUserRequest(
     String phone,
     @NotBlank String displayName,
     @NotBlank String role,
-    UUID storeId,
     List<UUID> storeIds
 ) {
 }

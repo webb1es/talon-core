@@ -52,13 +52,13 @@ class AuthApiTests {
 
     @Test
     void unauthenticatedPinEndpointsReturn401Json() throws Exception {
-        mockMvc.perform(put("/api/auth/pin")
+        mockMvc.perform(put("/api/v1/auth/pin")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"1234\"}"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.status").value(401));
 
-        mockMvc.perform(post("/api/auth/pin/verify")
+        mockMvc.perform(post("/api/v1/auth/pin/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"1234\"}"))
             .andExpect(status().isUnauthorized())
@@ -67,61 +67,61 @@ class AuthApiTests {
 
     @Test
     void putPinThenVerifySucceeds() throws Exception {
-        mockMvc.perform(put("/api/auth/pin")
+        mockMvc.perform(put("/api/v1/auth/pin")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"2468\"}"))
             .andExpect(status().isNoContent());
 
-        mockMvc.perform(post("/api/auth/pin/verify")
+        mockMvc.perform(post("/api/v1/auth/pin/verify")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"2468\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.valid").value(true));
+            .andExpect(jsonPath("$.data.valid").value(true));
 
-        mockMvc.perform(post("/api/auth/pin/verify")
+        mockMvc.perform(post("/api/v1/auth/pin/verify")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"0000\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.valid").value(false));
+            .andExpect(jsonPath("$.data.valid").value(false));
     }
 
     @Test
-    void mePinAliasSetsHasPin() throws Exception {
-        mockMvc.perform(put("/api/me/pin")
+    void setPinIsReflectedOnMe() throws Exception {
+        mockMvc.perform(put("/api/v1/auth/pin")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"1357\"}"))
             .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/me").with(adminLogin()))
+        mockMvc.perform(get("/api/v1/users/me").with(adminLogin()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.hasPin").value(true));
+            .andExpect(jsonPath("$.data.hasPin").value(true));
     }
 
     @Test
     void deletePinClearsCredential() throws Exception {
-        mockMvc.perform(put("/api/auth/pin")
+        mockMvc.perform(put("/api/v1/auth/pin")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"2468\"}"))
             .andExpect(status().isNoContent());
 
-        mockMvc.perform(delete("/api/auth/pin").with(adminLogin()))
+        mockMvc.perform(delete("/api/v1/auth/pin").with(adminLogin()))
             .andExpect(status().isNoContent());
 
-        mockMvc.perform(post("/api/auth/pin/verify")
+        mockMvc.perform(post("/api/v1/auth/pin/verify")
                 .with(adminLogin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"pin\":\"2468\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.valid").value(false));
+            .andExpect(jsonPath("$.data.valid").value(false));
 
-        mockMvc.perform(get("/api/me").with(adminLogin()))
+        mockMvc.perform(get("/api/v1/users/me").with(adminLogin()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.hasPin").value(false));
+            .andExpect(jsonPath("$.data.hasPin").value(false));
     }
 
     private static RequestPostProcessor adminLogin() {

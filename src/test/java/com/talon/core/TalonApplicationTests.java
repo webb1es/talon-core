@@ -25,7 +25,7 @@ class TalonApplicationTests {
 
     @Test
     void unauthenticatedApiReturns401Json() throws Exception {
-        mockMvc.perform(get("/api/me"))
+        mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.detail").value("Authentication required"));

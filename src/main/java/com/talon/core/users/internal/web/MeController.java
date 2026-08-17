@@ -12,25 +12,27 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequestMapping("/api/v1/users/me")
 @RequiredArgsConstructor
 public class MeController {
 
     private final MeService meService;
 
-    @GetMapping({"/api/me", "/api/profile/session-info"})
+    @GetMapping
     public MeResponse me(@CurrentUser CurrentUserProfile currentUser) {
         return meService.me(currentUser);
     }
 
-    @PatchMapping("/api/me")
+    @PatchMapping
     public MeResponse patch(@CurrentUser CurrentUserProfile currentUser, @RequestBody PatchMeRequest request) {
         return meService.patch(currentUser, request);
     }
 
-    @PutMapping({"/api/me/default-store", "/api/profile/store"})
+    @PutMapping("/default-store")
     public void switchDefaultStore(@CurrentUser CurrentUserProfile currentUser,
                                    @Valid @RequestBody DefaultStoreRequest request) {
         meService.switchDefaultStore(currentUser, request.storeId());

@@ -11,7 +11,6 @@ public record UserResponse(
     String phone,
     String displayName,
     String role,
-    UUID storeId,
     boolean active,
     String avatarUrl,
     Instant createdAt,

@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public interface UserAccountPort {
 
-    Optional<LocalAccount> findByKeycloakId(UUID keycloakId);
+    Optional<LocalAccount> findById(UUID id);
 
     record LocalAccount(
         UUID id,

@@ -103,7 +103,7 @@ public class UserService {
             keycloakAdminPort.assignRealmRole(keycloakId, targetRole.getValue());
 
             User user = new User();
-            user.setKeycloakId(UUID.fromString(keycloakId));
+            user.setId(UUID.fromString(keycloakId));
             user.setUsername(username);
             user.setEmail(body.email());
             normalizedPhone.ifPresent(user::setPhone);
@@ -160,7 +160,7 @@ public class UserService {
             target.setRole(newRole);
         }
 
-        String keycloakId = target.getKeycloakId().toString();
+        String keycloakId = target.getId().toString();
         Map<String, Object> previousKeycloakUser = null;
         boolean keycloakChanged = false;
         try {
@@ -207,7 +207,7 @@ public class UserService {
 
         userStoreRepository.deleteAll(userStoreRepository.findByUserId(id));
         userRepository.delete(target);
-        keycloakAdminPort.deleteUser(target.getKeycloakId().toString());
+        keycloakAdminPort.deleteUser(target.getId().toString());
     }
 
     public void resetPassword(CurrentUserProfile currentUser, UUID id) {
@@ -218,7 +218,7 @@ public class UserService {
         if (!rbac.canManage(roleOf(currentUser), target.getRole())) {
             throw new AccessDeniedException("You do not have permission to reset this user's password");
         }
-        keycloakAdminPort.resetPassword(target.getKeycloakId().toString(), generateTempPassword());
+        keycloakAdminPort.resetPassword(target.getId().toString(), generateTempPassword());
     }
 
     @Transactional(readOnly = true)

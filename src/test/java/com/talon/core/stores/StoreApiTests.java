@@ -181,7 +181,7 @@ class StoreApiTests {
     private User seedUser(String username, UUID keycloakId, Role role) {
         return userRepository.findByUsername(username).orElseGet(() -> {
             User user = new User();
-            user.setKeycloakId(keycloakId);
+            user.setId(keycloakId);
             user.setUsername(username);
             user.setDisplayName(username);
             user.setRole(role);

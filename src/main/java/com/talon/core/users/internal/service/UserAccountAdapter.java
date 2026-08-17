@@ -21,8 +21,8 @@ public class UserAccountAdapter implements UserAccountPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<LocalAccount> findByKeycloakId(UUID keycloakId) {
-        return userRepository.findByKeycloakId(keycloakId).map(user -> {
+    public Optional<LocalAccount> findById(UUID id) {
+        return userRepository.findById(id).map(user -> {
             List<UserStore> assignments = userStoreRepository.findByUserId(user.getId());
             List<UUID> storeIds = assignments.stream().map(UserStore::getStoreId).toList();
             UUID defaultStoreId = assignments.stream()

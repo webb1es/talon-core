@@ -41,7 +41,7 @@ class AuthApiTests {
     void seedUser() {
         userRepository.findByUsername("admin-user").orElseGet(() -> {
             User user = new User();
-            user.setKeycloakId(ADMIN_KEYCLOAK_ID);
+            user.setId(ADMIN_KEYCLOAK_ID);
             user.setUsername("admin-user");
             user.setDisplayName("admin-user");
             user.setRole(Role.ADMIN);

@@ -26,8 +26,8 @@ public class CurrentUserService {
     private final UserAccountPort userAccountPort;
 
     public CurrentUserProfile resolve(OidcUser oidcUser) {
-        UUID keycloakId = UUID.fromString(oidcUser.getSubject());
-        UserAccountPort.LocalAccount account = userAccountPort.findByKeycloakId(keycloakId)
+        UUID subjectId = UUID.fromString(oidcUser.getSubject());
+        UserAccountPort.LocalAccount account = userAccountPort.findById(subjectId)
             .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.FORBIDDEN, "No local account for this Keycloak identity"));
 

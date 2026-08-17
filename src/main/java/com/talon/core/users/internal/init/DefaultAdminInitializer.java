@@ -15,8 +15,10 @@ import java.util.UUID;
 /**
  * First super_admin cannot be created through UserController. Every boot
  * checks that tadmin exists in Keycloak and in the local users row, creating
- * whichever side is missing and aligning keycloakId. No-op when both already
- * match, or if Keycloak is unreachable.
+ * whichever side is missing. User.id is the Keycloak subject, so if the local
+ * row's id ever drifts from Keycloak's (e.g. a realm reset), it's recreated
+ * rather than repointed — JPA can't reassign an existing row's id. No-op when
+ * both already match, or if Keycloak is unreachable.
  */
 @Component
 @RequiredArgsConstructor
@@ -50,9 +52,11 @@ public class DefaultAdminInitializer implements ApplicationRunner {
                 createLocalRow(linkedId);
                 return;
             }
-            if (!linkedId.equals(local.getKeycloakId())) {
-                local.setKeycloakId(linkedId);
-                userRepository.save(local);
+            if (!linkedId.equals(local.getId())) {
+                log.warn("Local {} row id {} does not match Keycloak id {} — recreating local row",
+                    USERNAME, local.getId(), linkedId);
+                userRepository.delete(local);
+                createLocalRow(linkedId);
             }
         } catch (RuntimeException e) {
             if (createdKeycloakId != null) {
@@ -68,7 +72,7 @@ public class DefaultAdminInitializer implements ApplicationRunner {
 
     private void createLocalRow(UUID keycloakId) {
         User user = new User();
-        user.setKeycloakId(keycloakId);
+        user.setId(keycloakId);
         user.setUsername(USERNAME);
         user.setEmail(EMAIL);
         user.setDisplayName(DISPLAY_NAME);

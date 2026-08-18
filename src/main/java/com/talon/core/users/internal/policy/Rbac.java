@@ -1,6 +1,6 @@
 package com.talon.core.users.internal.policy;
 
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,19 +10,19 @@ import java.util.UUID;
 @Service
 public class Rbac {
 
-    private static final Map<Role, List<Role>> MANAGEABLE_ROLES = Map.of(
-        Role.SUPER_ADMIN, List.of(Role.ADMIN),
-        Role.ADMIN, List.of(Role.MANAGER, Role.CASHIER),
-        Role.MANAGER, List.of(Role.CASHIER),
-        Role.CASHIER, List.of()
+    private static final Map<Group, List<Group>> MANAGEABLE_GROUPS = Map.of(
+        Group.SUPER_ADMIN, List.of(Group.ADMIN),
+        Group.ADMIN, List.of(Group.MANAGER, Group.CASHIER),
+        Group.MANAGER, List.of(Group.CASHIER),
+        Group.CASHIER, List.of()
     );
 
-    public boolean canManage(Role callerRole, Role targetRole) {
-        return MANAGEABLE_ROLES.getOrDefault(callerRole, List.of()).contains(targetRole);
+    public boolean canManage(Group callerGroup, Group targetGroup) {
+        return MANAGEABLE_GROUPS.getOrDefault(callerGroup, List.of()).contains(targetGroup);
     }
 
-    public boolean canAssignRole(Role callerRole, Role newRole) {
-        return canManage(callerRole, newRole);
+    public boolean canAssignGroup(Group callerGroup, Group newGroup) {
+        return canManage(callerGroup, newGroup);
     }
 
     public boolean hasStoreOverlap(List<UUID> callerStoreIds, List<UUID> targetStoreIds) {

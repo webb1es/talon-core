@@ -1,6 +1,6 @@
 package com.talon.core.users.internal.init;
 
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import com.talon.core.users.internal.entity.User;
 import com.talon.core.users.internal.repository.UserRepository;
 import com.talon.core.auth.KeycloakAdminPort;
@@ -44,7 +44,7 @@ public class DefaultAdminInitializer implements ApplicationRunner {
             if (keycloakId == null) {
                 keycloakId = keycloakAdminPort.createUser(USERNAME, EMAIL, BOOTSTRAP_PASSWORD, true);
                 createdKeycloakId = keycloakId;
-                keycloakAdminPort.assignRealmRole(keycloakId, Role.SUPER_ADMIN.getValue());
+                keycloakAdminPort.assignGroup(keycloakId, Group.SUPER_ADMIN.getValue());
             }
 
             UUID linkedId = UUID.fromString(keycloakId);
@@ -76,7 +76,7 @@ public class DefaultAdminInitializer implements ApplicationRunner {
         user.setUsername(USERNAME);
         user.setEmail(EMAIL);
         user.setDisplayName(DISPLAY_NAME);
-        user.setRole(Role.SUPER_ADMIN);
+        user.setGroup(Group.SUPER_ADMIN);
         user.setActive(true);
         userRepository.save(user);
     }

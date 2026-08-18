@@ -1,7 +1,7 @@
 package com.talon.core.users.internal.service;
 
 import com.talon.core.users.internal.dto.CreateUserRequest;
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import com.talon.core.users.internal.dto.StoreAssignmentDto;
 import com.talon.core.users.internal.dto.UpdateUserRequest;
 import com.talon.core.users.internal.entity.User;
@@ -47,7 +47,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserResponse> list(CurrentUserProfile currentUser) {
-        Role currentUserRole = roleOf(currentUser);
+        Group currentUserGroup = groupOf(currentUser);
         List<User> allUsers = userRepository.findAll();
         List<UserStore> allAssignments = userStoreRepository.findAll();
 
@@ -60,9 +60,9 @@ public class UserService {
 
         return allUsers.stream()
             .filter(u -> !u.getId().equals(currentUser.id()))
-            .filter(u -> rbac.canManage(currentUserRole, u.getRole()))
+            .filter(u -> rbac.canManage(currentUserGroup, u.getGroup()))
             .filter(u -> {
-                if (currentUserRole != Role.MANAGER) {
+                if (currentUserGroup != Group.MANAGER) {
                     return true;
                 }
                 List<UUID> targetStoreIds = assignmentsByUser.getOrDefault(u.getId(), List.of()).stream()
@@ -87,10 +87,10 @@ public class UserService {
 
     @Transactional
     public UserResponse create(CurrentUserProfile currentUser, CreateUserRequest body) {
-        Role currentUserRole = roleOf(currentUser);
-        Role targetRole = Role.fromValue(body.role());
-        if (!rbac.canManage(currentUserRole, targetRole)) {
-            throw new AccessDeniedException("You do not have permission to create this role");
+        Group currentUserGroup = groupOf(currentUser);
+        Group targetGroup = Group.fromValue(body.group());
+        if (!rbac.canManage(currentUserGroup, targetGroup)) {
+            throw new AccessDeniedException("You do not have permission to create this group");
         }
         String username = body.username().toLowerCase();
         Optional<String> normalizedPhone = PhoneNumbers.normalize(body.phone());
@@ -100,7 +100,7 @@ public class UserService {
         String keycloakId = null;
         try {
             keycloakId = keycloakAdminPort.createUser(username, body.email(), generateTempPassword(), true);
-            keycloakAdminPort.assignRealmRole(keycloakId, targetRole.getValue());
+            keycloakAdminPort.assignGroup(keycloakId, targetGroup.getValue());
 
             User user = new User();
             user.setId(UUID.fromString(keycloakId));
@@ -108,7 +108,7 @@ public class UserService {
             user.setEmail(body.email());
             normalizedPhone.ifPresent(user::setPhone);
             user.setDisplayName(body.displayName());
-            user.setRole(targetRole);
+            user.setGroup(targetGroup);
             user.setActive(true);
             user = userRepository.save(user);
             saveStoreAssignments(user.getId(), resolvedStoreIds);
@@ -133,11 +133,11 @@ public class UserService {
         User target = requireUser(id);
         requireCanManage(currentUser, target);
 
-        Role currentUserRole = roleOf(currentUser);
-        Role previousRole = target.getRole();
-        Role newRole = body.role() != null ? Role.fromValue(body.role()) : null;
-        if (newRole != null && newRole != previousRole && !rbac.canAssignRole(currentUserRole, newRole)) {
-            throw new AccessDeniedException("You cannot assign this role");
+        Group currentUserGroup = groupOf(currentUser);
+        Group previousGroup = target.getGroup();
+        Group newGroup = body.group() != null ? Group.fromValue(body.group()) : null;
+        if (newGroup != null && newGroup != previousGroup && !rbac.canAssignGroup(currentUserGroup, newGroup)) {
+            throw new AccessDeniedException("You cannot assign this group");
         }
 
         Map<String, Object> keycloakUpdate = new HashMap<>();
@@ -156,23 +156,23 @@ public class UserService {
             target.setActive(body.active());
             keycloakUpdate.put("enabled", body.active());
         }
-        if (newRole != null) {
-            target.setRole(newRole);
+        if (newGroup != null) {
+            target.setGroup(newGroup);
         }
 
         String keycloakId = target.getId().toString();
         Map<String, Object> previousKeycloakUser = null;
         boolean keycloakChanged = false;
         try {
-            if (!keycloakUpdate.isEmpty() || newRole != null) {
+            if (!keycloakUpdate.isEmpty() || newGroup != null) {
                 previousKeycloakUser = keycloakAdminPort.getUser(keycloakId);
             }
             if (!keycloakUpdate.isEmpty()) {
                 keycloakAdminPort.updateUser(keycloakId, keycloakUpdate);
                 keycloakChanged = true;
             }
-            if (newRole != null) {
-                keycloakAdminPort.assignRealmRole(keycloakId, newRole.getValue());
+            if (newGroup != null) {
+                keycloakAdminPort.assignGroup(keycloakId, newGroup.getValue());
                 keycloakChanged = true;
             }
 
@@ -186,7 +186,7 @@ public class UserService {
             if (keycloakChanged) {
                 try {
                     keycloakAdminPort.replaceUser(keycloakId, previousKeycloakUser);
-                    keycloakAdminPort.assignRealmRole(keycloakId, previousRole.getValue());
+                    keycloakAdminPort.assignGroup(keycloakId, previousGroup.getValue());
                 } catch (RuntimeException cleanup) {
                     log.error("Failed to roll back Keycloak user {} after local update failed", keycloakId, cleanup);
                 }
@@ -210,12 +210,10 @@ public class UserService {
         keycloakAdminPort.deleteUser(target.getId().toString());
     }
 
+    /** Group-level gate (only super_admin holds the reset_password role) is enforced by @PreAuthorize on the controller. */
     public void resetPassword(CurrentUserProfile currentUser, UUID id) {
-        if (roleOf(currentUser) != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only super admins can reset passwords");
-        }
         User target = requireUser(id);
-        if (!rbac.canManage(roleOf(currentUser), target.getRole())) {
+        if (!rbac.canManage(groupOf(currentUser), target.getGroup())) {
             throw new AccessDeniedException("You do not have permission to reset this user's password");
         }
         keycloakAdminPort.resetPassword(target.getId().toString(), generateTempPassword());
@@ -224,7 +222,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserOverviewResponse overview() {
         List<User> staff = userRepository.findAll().stream()
-            .filter(u -> u.getRole() != Role.SUPER_ADMIN)
+            .filter(u -> u.getGroup() != Group.SUPER_ADMIN)
             .toList();
         Map<UUID, List<UserStore>> assignmentsByUser = userStoreRepository.findAll().stream()
             .collect(Collectors.groupingBy(UserStore::getUserId));
@@ -235,11 +233,11 @@ public class UserService {
             .filter(u -> assignmentsByUser.getOrDefault(u.getId(), List.of()).isEmpty())
             .count();
 
-        List<UserOverviewResponse.RoleBreakdown> roles = List.of(Role.ADMIN, Role.MANAGER, Role.CASHIER).stream()
-            .map(role -> {
-                List<User> matching = staff.stream().filter(u -> u.getRole() == role).toList();
-                return new UserOverviewResponse.RoleBreakdown(
-                    role.getValue(),
+        List<UserOverviewResponse.GroupBreakdown> groups = List.of(Group.ADMIN, Group.MANAGER, Group.CASHIER).stream()
+            .map(group -> {
+                List<User> matching = staff.stream().filter(u -> u.getGroup() == group).toList();
+                return new UserOverviewResponse.GroupBreakdown(
+                    group.getValue(),
                     matching.size(),
                     (int) matching.stream().filter(User::isActive).count()
                 );
@@ -251,26 +249,26 @@ public class UserService {
                 boolean noStore = assignmentsByUser.getOrDefault(u.getId(), List.of()).isEmpty();
                 if (!u.isActive()) {
                     return new UserOverviewResponse.AttentionUser(
-                        u.getId(), u.getDisplayName(), u.getEmail(), u.getRole().getValue(), "inactive");
+                        u.getId(), u.getDisplayName(), u.getEmail(), u.getGroup().getValue(), "inactive");
                 }
                 if (noStore) {
                     return new UserOverviewResponse.AttentionUser(
-                        u.getId(), u.getDisplayName(), u.getEmail(), u.getRole().getValue(), "no_store");
+                        u.getId(), u.getDisplayName(), u.getEmail(), u.getGroup().getValue(), "no_store");
                 }
                 return null;
             })
             .filter(java.util.Objects::nonNull)
             .toList();
 
-        return new UserOverviewResponse(total, active, total - active, unassigned, roles, attention);
+        return new UserOverviewResponse(total, active, total - active, unassigned, groups, attention);
     }
 
     private void requireCanManage(CurrentUserProfile currentUser, User target) {
-        Role currentUserRole = roleOf(currentUser);
+        Group currentUserGroup = groupOf(currentUser);
         List<UUID> targetStoreIds = userStoreRepository.findByUserId(target.getId()).stream()
             .map(UserStore::getStoreId).toList();
-        boolean canManageTarget = rbac.canManage(currentUserRole, target.getRole())
-            && (currentUserRole != Role.MANAGER || rbac.hasStoreOverlap(currentUser.storeIds(), targetStoreIds));
+        boolean canManageTarget = rbac.canManage(currentUserGroup, target.getGroup())
+            && (currentUserGroup != Group.MANAGER || rbac.hasStoreOverlap(currentUser.storeIds(), targetStoreIds));
         if (!canManageTarget) {
             throw new AccessDeniedException("You do not have permission to manage this user");
         }
@@ -281,8 +279,8 @@ public class UserService {
             .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
-    private static Role roleOf(CurrentUserProfile currentUser) {
-        return Role.fromValue(currentUser.role());
+    private static Group groupOf(CurrentUserProfile currentUser) {
+        return Group.fromValue(currentUser.group());
     }
 
     private static String generateTempPassword() {
@@ -327,7 +325,7 @@ public class UserService {
             user.getEmail(),
             user.getPhone(),
             user.getDisplayName(),
-            user.getRole().getValue(),
+            user.getGroup().getValue(),
             user.isActive(),
             user.getAvatarUrl(),
             user.getCreatedAt(),

@@ -20,5 +20,6 @@ public interface KeycloakAdminPort {
 
     void resetPassword(String keycloakId, String newPassword);
 
-    void assignRealmRole(String keycloakId, String roleName);
+    /** Adds the user to the named group, removing membership in any other Talon group first. */
+    void assignGroup(String keycloakId, String groupName);
 }

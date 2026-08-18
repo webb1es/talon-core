@@ -4,11 +4,11 @@ import com.talon.core.auth.CurrentUserProfile;
 import com.talon.core.auth.UserAccountPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CurrentUserService {
 
-    private static final Set<String> TALON_ROLES = Set.of("super_admin", "admin", "manager", "cashier");
+    private static final Set<String> TALON_GROUPS = Set.of("super_admin", "admin", "manager", "cashier");
 
     private final UserAccountPort userAccountPort;
 
@@ -39,21 +39,19 @@ public class CurrentUserService {
             account.id(),
             account.email(),
             account.displayName(),
-            liveRole(oidcUser),
+            liveGroup(oidcUser),
             account.active(),
             account.storeIds(),
             account.defaultStoreId()
         );
     }
 
-    /** The caller's own role comes from the token just authenticated with, not the local cache used for other users. */
-    private String liveRole(OidcUser oidcUser) {
-        return oidcUser.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(authority -> authority.startsWith("ROLE_"))
-            .map(authority -> authority.substring("ROLE_".length()))
-            .filter(TALON_ROLES::contains)
+    /** The caller's own group comes from the token just authenticated with, not the local cache used for other users. */
+    private String liveGroup(OidcUser oidcUser) {
+        List<String> groups = oidcUser.getClaimAsStringList("groups");
+        return (groups == null ? List.<String>of() : groups).stream()
+            .filter(TALON_GROUPS::contains)
             .findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No Talon role assigned"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No Talon group assigned"));
     }
 }

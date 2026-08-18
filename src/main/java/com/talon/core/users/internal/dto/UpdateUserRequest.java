@@ -7,7 +7,7 @@ public record UpdateUserRequest(
     String displayName,
     String email,
     String phone,
-    String role,
+    String group,
     List<UUID> storeIds,
     Boolean active
 ) {

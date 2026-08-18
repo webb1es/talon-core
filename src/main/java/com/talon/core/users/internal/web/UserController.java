@@ -40,7 +40,7 @@ public class UserController {
     }
 
     @GetMapping("/overview")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('view_users_overview')")
     public UserOverviewResponse overview(@CurrentUser CurrentUserProfile currentUser) {
         return userService.overview();
     }
@@ -51,6 +51,7 @@ public class UserController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('manage_users')")
     public ResponseEntity<UserResponse> create(@CurrentUser CurrentUserProfile currentUser,
                                                @Valid @RequestBody CreateUserRequest request) {
         UserResponse created = userService.create(currentUser, request);
@@ -62,6 +63,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('manage_users')")
     public UserResponse update(@PathVariable UUID id, @CurrentUser CurrentUserProfile currentUser,
                                @RequestBody UpdateUserRequest request) {
         return userService.update(currentUser, id, request);
@@ -69,12 +71,14 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('manage_users')")
     public void delete(@PathVariable UUID id, @CurrentUser CurrentUserProfile currentUser) {
         userService.delete(currentUser, id);
     }
 
     @PostMapping("/{id}/password-reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('reset_password')")
     public void resetPassword(@PathVariable UUID id, @CurrentUser CurrentUserProfile currentUser) {
         userService.resetPassword(currentUser, id);
     }

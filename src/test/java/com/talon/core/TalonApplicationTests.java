@@ -34,11 +34,11 @@ class TalonApplicationTests {
     @Test
     void swaggerRequiresSuperAdminRole() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html")
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_admin"))))
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_manage_users"))))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/swagger-ui/index.html")
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_super_admin"))))
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_manage_system_settings"))))
                 .andExpect(status().is2xxSuccessful());
     }
 

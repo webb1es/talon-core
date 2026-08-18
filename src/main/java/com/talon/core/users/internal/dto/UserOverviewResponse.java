@@ -8,16 +8,16 @@ public record UserOverviewResponse(
     int activeUsers,
     int inactiveUsers,
     int unassignedUsers,
-    List<RoleBreakdown> roles,
+    List<GroupBreakdown> groups,
     List<AttentionUser> attention
 ) {
-    public record RoleBreakdown(String role, int count, int activeCount) {}
+    public record GroupBreakdown(String group, int count, int activeCount) {}
 
     public record AttentionUser(
         UUID id,
         String displayName,
         String email,
-        String role,
+        String group,
         String reason
     ) {}
 }

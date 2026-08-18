@@ -44,7 +44,7 @@ public class StoreController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('admin', 'super_admin')")
+    @PreAuthorize("hasRole('manage_stores')")
     public ResponseEntity<StoreResponse> create(@Valid @RequestBody CreateStoreRequest request,
                                                 @CurrentUser CurrentUserProfile currentUser) {
         StoreResponse created = storeService.create(request, currentUser);
@@ -56,7 +56,7 @@ public class StoreController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('admin', 'super_admin')")
+    @PreAuthorize("hasRole('manage_stores')")
     public StoreResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateStoreRequest request,
                                 @CurrentUser CurrentUserProfile currentUser) {
         return storeService.update(id, request, currentUser);
@@ -64,7 +64,7 @@ public class StoreController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('admin', 'super_admin')")
+    @PreAuthorize("hasRole('manage_stores')")
     public void delete(@PathVariable UUID id, @CurrentUser CurrentUserProfile currentUser) {
         storeService.delete(id, currentUser);
     }

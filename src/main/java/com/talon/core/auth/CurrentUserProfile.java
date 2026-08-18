@@ -7,7 +7,7 @@ public record CurrentUserProfile(
     UUID id,
     String email,
     String name,
-    String role,
+    String group,
     boolean active,
     List<UUID> storeIds,
     UUID defaultStoreId

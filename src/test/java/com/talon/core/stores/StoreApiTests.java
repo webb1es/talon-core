@@ -3,7 +3,7 @@ package com.talon.core.stores;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.talon.core.stores.internal.entity.Store;
 import com.talon.core.stores.internal.repository.StoreRepository;
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import com.talon.core.users.internal.entity.User;
 import com.talon.core.users.internal.entity.UserStore;
 import com.talon.core.users.internal.repository.UserRepository;
@@ -58,8 +58,8 @@ class StoreApiTests {
 
     @BeforeEach
     void seedUsers() {
-        seedUser("admin-user", ADMIN_KEYCLOAK_ID, Role.ADMIN);
-        seedUser("cashier-user", CASHIER_KEYCLOAK_ID, Role.CASHIER);
+        seedUser("admin-user", ADMIN_KEYCLOAK_ID, Group.ADMIN);
+        seedUser("cashier-user", CASHIER_KEYCLOAK_ID, Group.CASHIER);
     }
 
     @Test
@@ -178,13 +178,13 @@ class StoreApiTests {
             .andExpect(jsonPath("$.errors.name").exists());
     }
 
-    private User seedUser(String username, UUID keycloakId, Role role) {
+    private User seedUser(String username, UUID keycloakId, Group group) {
         return userRepository.findByUsername(username).orElseGet(() -> {
             User user = new User();
             user.setId(keycloakId);
             user.setUsername(username);
             user.setDisplayName(username);
-            user.setRole(role);
+            user.setGroup(group);
             user.setActive(true);
             return userRepository.save(user);
         });
@@ -200,13 +200,15 @@ class StoreApiTests {
 
     private static RequestPostProcessor adminLogin() {
         return oidcLogin()
-            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString()))
-            .authorities(new SimpleGrantedAuthority("ROLE_admin"));
+            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString())
+                .claim("groups", java.util.List.of("admin")))
+            .authorities(new SimpleGrantedAuthority("ROLE_manage_stores"));
     }
 
     private static RequestPostProcessor cashierLogin() {
         return oidcLogin()
-            .idToken(token -> token.subject(CASHIER_KEYCLOAK_ID.toString()))
-            .authorities(new SimpleGrantedAuthority("ROLE_cashier"));
+            .idToken(token -> token.subject(CASHIER_KEYCLOAK_ID.toString())
+                .claim("groups", java.util.List.of("cashier")))
+            .authorities(new SimpleGrantedAuthority("ROLE_view_stores"));
     }
 }

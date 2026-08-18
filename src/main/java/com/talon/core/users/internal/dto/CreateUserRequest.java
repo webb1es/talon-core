@@ -10,7 +10,7 @@ public record CreateUserRequest(
     String email,
     String phone,
     @NotBlank String displayName,
-    @NotBlank String role,
+    @NotBlank String group,
     List<UUID> storeIds
 ) {
 }

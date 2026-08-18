@@ -8,7 +8,8 @@ public record MeResponse(
     String username,
     String email,
     String displayName,
-    String role,
+    String group,
+    List<String> permissions,
     String avatarUrl,
     List<StoreAssignmentDto> storeAssignments,
     boolean hasPin

@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StoreService implements StorePort {
 
-    private static final Set<String> ADMIN_ROLES = Set.of("admin", "super_admin");
+    private static final Set<String> ADMIN_GROUPS = Set.of("admin", "super_admin");
     private static final BigDecimal DEFAULT_TAX_RATE = new BigDecimal("0.15");
     private static final String DEFAULT_CURRENCY = "USD";
     private static final String DEFAULT_TIMEZONE = "Africa/Harare";
@@ -160,7 +160,7 @@ public class StoreService implements StorePort {
     }
 
     private static boolean isAdmin(CurrentUserProfile currentUser) {
-        return ADMIN_ROLES.contains(currentUser.role());
+        return ADMIN_GROUPS.contains(currentUser.group());
     }
 
     private static String normalizeCurrency(String currencyCode) {

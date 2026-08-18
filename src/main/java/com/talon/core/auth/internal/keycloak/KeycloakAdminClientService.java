@@ -2,7 +2,6 @@ package com.talon.core.auth.internal.keycloak;
 
 import com.talon.core.auth.KeycloakAdminPort;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +13,6 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,9 +28,9 @@ import java.util.function.Supplier;
 @Service
 public class KeycloakAdminClientService implements KeycloakAdminPort {
 
-    /** The only realm roles this app manages — never touch anything else a
-     * user might be assigned (default realm roles like offline_access). */
-    private static final Set<String> TALON_ROLE_NAMES =
+    /** The only groups this app manages — never touch anything else a
+     * user might belong to. */
+    private static final Set<String> TALON_GROUP_NAMES =
         Set.of("super_admin", "admin", "manager", "cashier");
 
     private final RestClient restClient;
@@ -199,46 +197,56 @@ public class KeycloakAdminClientService implements KeycloakAdminPort {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void assignRealmRole(String keycloakId, String roleName) {
-        List<Map<String, Object>> currentMappings = call(() -> restClient.get()
-            .uri("/users/{id}/role-mappings/realm", keycloakId)
+    public void assignGroup(String keycloakId, String groupName) {
+        List<Map<String, Object>> currentGroups = call(() -> restClient.get()
+            .uri("/users/{id}/groups", keycloakId)
             .retrieve()
             .body(List.class));
 
-        if (currentMappings != null) {
-            List<Map<String, Object>> toRemove = currentMappings.stream()
-                .filter(m -> TALON_ROLE_NAMES.contains((String) m.get("name")))
-                .filter(m -> !roleName.equals(m.get("name")))
+        if (currentGroups != null) {
+            List<Map<String, Object>> toRemove = currentGroups.stream()
+                .filter(g -> TALON_GROUP_NAMES.contains((String) g.get("name")))
+                .filter(g -> !groupName.equals(g.get("name")))
                 .toList();
-            if (!toRemove.isEmpty()) {
+            for (Map<String, Object> group : toRemove) {
+                String groupId = (String) group.get("id");
                 call(() -> {
-                    restClient.method(HttpMethod.DELETE)
-                        .uri("/users/{id}/role-mappings/realm", keycloakId)
-                        .body(toRemove)
+                    restClient.delete()
+                        .uri("/users/{id}/groups/{groupId}", keycloakId, groupId)
                         .retrieve()
                         .toBodilessEntity();
                     return null;
                 });
             }
-            boolean alreadyAssigned = currentMappings.stream()
-                .anyMatch(m -> roleName.equals(m.get("name")));
+            boolean alreadyAssigned = currentGroups.stream()
+                .anyMatch(g -> groupName.equals(g.get("name")));
             if (alreadyAssigned) {
                 return;
             }
         }
 
-        Map<String, Object> roleRepresentation = call(() -> restClient.get()
-            .uri("/roles/{roleName}", roleName)
-            .retrieve()
-            .body(Map.class));
-
+        String groupId = findGroupIdByName(groupName);
         call(() -> {
-            restClient.post()
-                .uri("/users/{id}/role-mappings/realm", keycloakId)
-                .body(new ArrayList<>(List.of(roleRepresentation)))
+            restClient.put()
+                .uri("/users/{id}/groups/{groupId}", keycloakId, groupId)
                 .retrieve()
                 .toBodilessEntity();
             return null;
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private String findGroupIdByName(String groupName) {
+        List<Map<String, Object>> results = call(() -> restClient.get()
+            .uri(uriBuilder -> uriBuilder.path("/groups")
+                .queryParam("search", groupName)
+                .queryParam("exact", true)
+                .build())
+            .retrieve()
+            .body(List.class));
+        if (results == null || results.isEmpty()) {
+            throw new IllegalStateException("Keycloak group not found: " + groupName);
+        }
+        return (String) results.get(0).get("id");
     }
 }

@@ -31,9 +31,10 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String email;
 
+    /** Cached mirror of Keycloak group membership — bulk list/filter only, never trusted for authorization. */
     @Setter
-    @Column(nullable = false)
-    private Role role = Role.CASHIER;
+    @Column(name = "user_group", nullable = false) // "group" is a reserved SQL keyword
+    private Group group = Group.CASHIER;
 
     @Setter
     @Column(name = "avatar_url")

@@ -65,7 +65,7 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/readyz", "/healthz").permitAll()
-                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").hasRole("super_admin")
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").hasRole("manage_system_settings")
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2

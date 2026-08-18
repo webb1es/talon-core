@@ -1,6 +1,6 @@
 package com.talon.core.auth;
 
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import com.talon.core.users.internal.entity.User;
 import com.talon.core.users.internal.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +44,7 @@ class AuthApiTests {
             user.setId(ADMIN_KEYCLOAK_ID);
             user.setUsername("admin-user");
             user.setDisplayName("admin-user");
-            user.setRole(Role.ADMIN);
+            user.setGroup(Group.ADMIN);
             user.setActive(true);
             return userRepository.save(user);
         });
@@ -126,7 +126,8 @@ class AuthApiTests {
 
     private static RequestPostProcessor adminLogin() {
         return oidcLogin()
-            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString()))
-            .authorities(new SimpleGrantedAuthority("ROLE_admin"));
+            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString())
+                .claim("groups", java.util.List.of("admin")))
+            .authorities(new SimpleGrantedAuthority("ROLE_manage_users"));
     }
 }

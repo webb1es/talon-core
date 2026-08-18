@@ -10,7 +10,7 @@ public record UserResponse(
     String email,
     String phone,
     String displayName,
-    String role,
+    String group,
     boolean active,
     String avatarUrl,
     Instant createdAt,

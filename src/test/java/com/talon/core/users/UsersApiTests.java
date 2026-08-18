@@ -2,7 +2,7 @@ package com.talon.core.users;
 
 import com.talon.core.stores.internal.entity.Store;
 import com.talon.core.stores.internal.repository.StoreRepository;
-import com.talon.core.users.internal.entity.Role;
+import com.talon.core.users.internal.entity.Group;
 import com.talon.core.users.internal.entity.User;
 import com.talon.core.users.internal.entity.UserStore;
 import com.talon.core.users.internal.repository.UserRepository;
@@ -51,8 +51,8 @@ class UsersApiTests {
 
     @BeforeEach
     void seedUsers() {
-        seedUser("admin-user", ADMIN_KEYCLOAK_ID, Role.ADMIN, true);
-        seedUser("cashier-user", CASHIER_KEYCLOAK_ID, Role.CASHIER, true);
+        seedUser("admin-user", ADMIN_KEYCLOAK_ID, Group.ADMIN, true);
+        seedUser("cashier-user", CASHIER_KEYCLOAK_ID, Group.CASHIER, true);
     }
 
     @Test
@@ -69,7 +69,7 @@ class UsersApiTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.username").value("admin-user"))
             .andExpect(jsonPath("$.data.displayName").value("admin-user"))
-            .andExpect(jsonPath("$.data.role").value("admin"))
+            .andExpect(jsonPath("$.data.group").value("admin"))
             .andExpect(jsonPath("$.data.hasPin").value(false))
             .andExpect(jsonPath("$.data.storeId").doesNotExist())
             .andExpect(jsonPath("$.data.storeAssignments").isArray());
@@ -126,8 +126,8 @@ class UsersApiTests {
 
     @Test
     void superAdminOverviewCountsStaffAndAttention() throws Exception {
-        seedUser("super-admin", SUPER_ADMIN_KEYCLOAK_ID, Role.SUPER_ADMIN, true);
-        seedUser("manager-user", MANAGER_KEYCLOAK_ID, Role.MANAGER, false);
+        seedUser("super-admin", SUPER_ADMIN_KEYCLOAK_ID, Group.SUPER_ADMIN, true);
+        seedUser("manager-user", MANAGER_KEYCLOAK_ID, Group.MANAGER, false);
 
         Store store = new Store();
         store.setName("Harare Main");
@@ -145,23 +145,23 @@ class UsersApiTests {
             .andExpect(jsonPath("$.data.activeUsers").value(2))
             .andExpect(jsonPath("$.data.inactiveUsers").value(1))
             .andExpect(jsonPath("$.data.unassignedUsers").value(2))
-            .andExpect(jsonPath("$.data.roles[0].role").value("admin"))
-            .andExpect(jsonPath("$.data.roles[0].count").value(1))
-            .andExpect(jsonPath("$.data.roles[1].role").value("manager"))
-            .andExpect(jsonPath("$.data.roles[1].count").value(1))
-            .andExpect(jsonPath("$.data.roles[1].activeCount").value(0))
-            .andExpect(jsonPath("$.data.roles[2].role").value("cashier"))
-            .andExpect(jsonPath("$.data.roles[2].count").value(1))
+            .andExpect(jsonPath("$.data.groups[0].group").value("admin"))
+            .andExpect(jsonPath("$.data.groups[0].count").value(1))
+            .andExpect(jsonPath("$.data.groups[1].group").value("manager"))
+            .andExpect(jsonPath("$.data.groups[1].count").value(1))
+            .andExpect(jsonPath("$.data.groups[1].activeCount").value(0))
+            .andExpect(jsonPath("$.data.groups[2].group").value("cashier"))
+            .andExpect(jsonPath("$.data.groups[2].count").value(1))
             .andExpect(jsonPath("$.data.attention", hasSize(2)));
     }
 
-    private User seedUser(String username, UUID keycloakId, Role role, boolean active) {
+    private User seedUser(String username, UUID keycloakId, Group group, boolean active) {
         return userRepository.findByUsername(username).orElseGet(() -> {
             User user = new User();
             user.setId(keycloakId);
             user.setUsername(username);
             user.setDisplayName(username);
-            user.setRole(role);
+            user.setGroup(group);
             user.setActive(active);
             return userRepository.save(user);
         });
@@ -169,13 +169,15 @@ class UsersApiTests {
 
     private static RequestPostProcessor adminLogin() {
         return oidcLogin()
-            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString()))
-            .authorities(new SimpleGrantedAuthority("ROLE_admin"));
+            .idToken(token -> token.subject(ADMIN_KEYCLOAK_ID.toString())
+                .claim("groups", java.util.List.of("admin")))
+            .authorities(new SimpleGrantedAuthority("ROLE_manage_users"));
     }
 
     private static RequestPostProcessor superAdminLogin() {
         return oidcLogin()
-            .idToken(token -> token.subject(SUPER_ADMIN_KEYCLOAK_ID.toString()))
-            .authorities(new SimpleGrantedAuthority("ROLE_super_admin"));
+            .idToken(token -> token.subject(SUPER_ADMIN_KEYCLOAK_ID.toString())
+                .claim("groups", java.util.List.of("super_admin")))
+            .authorities(new SimpleGrantedAuthority("ROLE_view_users_overview"));
     }
 }

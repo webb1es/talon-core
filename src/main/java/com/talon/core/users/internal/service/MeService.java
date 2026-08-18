@@ -12,6 +12,8 @@ import com.talon.core.shared.BadRequestException;
 import com.talon.core.shared.NotFoundException;
 import com.talon.core.stores.StorePort;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,11 +46,21 @@ public class MeService {
             user.getUsername(),
             user.getEmail(),
             user.getDisplayName(),
-            currentUser.role(),
+            currentUser.group(),
+            livePermissions(),
             user.getAvatarUrl(),
             storeAssignments,
             user.getPin() != null
         );
+    }
+
+    /** The granular roles the live token actually carries — what the API enforces, exposed for FE button-level guards. */
+    private List<String> livePermissions() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(authority -> authority.startsWith("ROLE_"))
+            .map(authority -> authority.substring("ROLE_".length()))
+            .toList();
     }
 
     @Transactional
